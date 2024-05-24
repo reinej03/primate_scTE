@@ -1,97 +1,99 @@
-#Load Files 
-barcode1 <- read.delim("GSE127774_ACC_B_barcodes.tsv", header = F, sep = "\t")
-genes1 <- data.table::fread("GSE127774_ACC_B_genes.tsv", header = F, data.table = F)
-barcode2 <- read.delim("GSE127774_ACC_C_barcodes.tsv", header = F, sep = "\t")
-genes2 <- data.table::fread("GSE127774_ACC_C_genes.tsv", header = F, data.table = F)
-barcode3 <- read.delim("GSE127774_ACC_H_barcodes.tsv", header = F, sep = "\t")
-genes3 <- read.table("GSE127774_ACC_H_genes.tsv", header = F, sep = "\t")
-barcode4 <- read.delim("GSE127774_ACC_M_barcodes.tsv", header = F, sep = "\t")
-genes4 <- read.table("GSE127774_ACC_M_genes.tsv", header = F, sep = "\t")
 
-library(Matrix)
-matrix1 <- readMM("GSE127774_ACC_B_matrix.mtx")
-matrix2 <- readMM("GSE127774_ACC_C_matrix.mtx")
-matrix3 <- readMM("GSE127774_ACC_H_matrix.mtx")
-matrix4 <- readMM("GSE127774_ACC_M_matrix.mtx")
+#read in matrices 
+library(Seurat)
+matrix1 <- Read10X("/Users/joreiner/Desktop/Semester 6/Bachelorarbeit/H")
+matrix2 <- Read10X("/Users/joreiner/Desktop/Semester 6/Bachelorarbeit/C")
+matrix3 <- Read10X("/Users/joreiner/Desktop/Semester 6/Bachelorarbeit/B")
+matrix4 <- Read10X("/Users/joreiner/Desktop/Semester 6/Bachelorarbeit/M")
 
+#name barcodes correctly (spcific to the species)
+colnames(matrix1) = paste0("H_",colnames(matrix1))
+colnames(matrix2) = paste0("C_",colnames(matrix2))
+colnames(matrix3) = paste0("B_",colnames(matrix3))
+colnames(matrix4) = paste0("M_",colnames(matrix4))
 
-#Add barcodes and genenames to the expression matrixes 
-rownames(matrix1) <- genes1$V1
-#rownames(matrix2) <- genes2$V1
-#rownames(matrix3) <- genes3$V1
-#rownames(matrix4) <- genes4$V1
-colnames(matrix1) <- barcode1$V1
-colnames(matrix2) <- barcode2$V1
-colnames(matrix3) <- barcode3$V1
-colnames(matrix4) <- barcode4$V1
+#filter for just the barcodes that are in the premade seurat object
+premade_seurat <- readRDS("premade_seurats/GSE127774_ACC_seurat.rds")
+premade_seurat <- UpdateSeuratObject(object = premade_seurat)
+
+barcodes_premade_seurat <- data.frame(colnames(premade_seurat))
+colnames(barcodes_premade_seurat) <- c("Barcodes")
+
+barcodes_premade_seurat_H <- data.frame(barcodes_premade_seurat[grepl("^H_", barcodes_premade_seurat$Barcodes), ])
+colnames(barcodes_premade_seurat_H) <- c("Barcodes")
+barcodes_premade_seurat_C <- data.frame(barcodes_premade_seurat[grepl("^C_", barcodes_premade_seurat$Barcodes), ])
+colnames(barcodes_premade_seurat_C) <- c("Barcodes")
+barcodes_premade_seurat_B <- data.frame(barcodes_premade_seurat[grepl("^B_", barcodes_premade_seurat$Barcodes), ])
+colnames(barcodes_premade_seurat_B) <- c("Barcodes")
+barcodes_premade_seurat_M <- data.frame(barcodes_premade_seurat[grepl("^M_", barcodes_premade_seurat$Barcodes), ])
+colnames(barcodes_premade_seurat_M) <- c("Barcodes")
+
+select_barcodes_H <-  c(barcodes_premade_seurat_H$Barcodes)
+barcode_indices_H <- match(select_barcodes_H, colnames(matrix1))
+select_barcodes_C <-  c(barcodes_premade_seurat_C$Barcodes)
+barcode_indices_C <- match(select_barcodes_C, colnames(matrix2))
+select_barcodes_B <-  c(barcodes_premade_seurat_B$Barcodes)
+barcode_indices_B <- match(select_barcodes_B, colnames(matrix3))
+select_barcodes_M <-  c(barcodes_premade_seurat_M$Barcodes)
+barcode_indices_M <- match(select_barcodes_M, colnames(matrix4))
+
+filtered_matrix_H <- matrix1[,barcode_indices_H]
+filtered_matrix_C <- matrix2[,barcode_indices_C]
+filtered_matrix_B <- matrix3[,barcode_indices_B]
+filtered_matrix_M <- matrix4[,barcode_indices_M]
 
 #create a seurat object for each species 
 library(Seurat)
-seurat1 <- CreateSeuratObject(counts = matrix1)
-seurat2 <- CreateSeuratObject(counts = matrix2)
-seurat3 <- CreateSeuratObject(counts = matrix3)
-seurat4 <- CreateSeuratObject(counts = matrix4)
+seurat1 <- CreateSeuratObject(counts = filtered_matrix_H)
+seurat2 <- CreateSeuratObject(counts = filtered_matrix_C)
+seurat3 <- CreateSeuratObject(counts = filtered_matrix_B)
+seurat4 <- CreateSeuratObject(counts = filtered_matrix_M)
 
-#Add the species identifiers for each species 
-seurat1@meta.data$orig.ident <- "B"
-seurat2@meta.data$orig.ident <- "C"
-seurat3@meta.data$orig.ident <- "H"
-seurat4@meta.data$orig.ident <- "M"
-
-
-Idents(seurat1) <- "B"
-Idents(seurat2) <- "C"
-Idents(seurat3) <- "H"
-Idents(seurat4) <- "M"
-
-#normalize each spechies seperately with a scale factor of 10000 (mendioned in paper)
+#normalize each spechies seperately with a scale factor of 10000 
 seurat1<- NormalizeData(seurat1, normalization.method = "LogNormalize", scale.factor = 10000)
 seurat2<- NormalizeData(seurat2, normalization.method = "LogNormalize", scale.factor = 10000)
 seurat3<- NormalizeData(seurat3, normalization.method = "LogNormalize", scale.factor = 10000)
 seurat4<- NormalizeData(seurat4, normalization.method = "LogNormalize", scale.factor = 10000)
 
-#find vaiable feature for each spechies seperately with a number of 2000 features (mendioned in paper)
-seurat1 <- FindVariableFeatures(seurat1, nfeatures = 2000)
-seurat2 <- FindVariableFeatures(seurat2, nfeatures = 2000)
-seurat3 <- FindVariableFeatures(seurat3, nfeatures = 2000)
-seurat4 <- FindVariableFeatures(seurat4, nfeatures = 2000)
+#find vaiable feature for each spechies seperately with a number of 2000 features 
+seurat1 <- FindVariableFeatures(seurat1,selection.method = "vst",  nfeatures = 2000)
+seurat2 <- FindVariableFeatures(seurat2,selection.method = "vst" ,nfeatures = 2000)
+seurat3 <- FindVariableFeatures(seurat3,selection.method = "vst", nfeatures = 2000)
+seurat4 <- FindVariableFeatures(seurat4, selection.method = "vst",nfeatures = 2000)
 
-#scate data and runPCA for it, because this is needed to use reduction="rpca" in FindIntegrationAnchors (nor mentioned in paper!!)
-seurat1 <- ScaleData(seurat1, verbose = F)
-seurat2 <- ScaleData(seurat2, verbose = F)
-seurat3 <- ScaleData(seurat3, verbose = F)
-seurat4 <- ScaleData(seurat4, verbose = F)
+#find anchors for the integration process  
+seurat_anchors2 <- FindIntegrationAnchors(object.list = list(seurat1, seurat2, seurat3, seurat4), dims = 1:30) #reduction="rpca"
 
-seurat1 <- RunPCA(seurat1, npcs = 30, verbose = F)
-seurat2 <- RunPCA(seurat2, npcs = 30, verbose = F)
-seurat3 <- RunPCA(seurat3, npcs = 30, verbose = F)
-seurat4 <- RunPCA(seurat4, npcs = 30, verbose = F)
+#integrate the seurat objects of the diffrent species according to the anchors that were found  
+seurat_integrated <- IntegrateData(anchorset = seurat_anchors2, dims = 1:30) 
 
-#start of the functions listed in their seurat object!
+#scale the integrated data
+seurat_integrated <- ScaleData(seurat_integrated, verbose = F)
 
-#reduction="rpca" is a different method than in their seurat object!! usually default should be cca 
-seurat_anchors <- FindIntegrationAnchors(object.list = list(seurat1, seurat2), dims = 1:30, reduction="rpca") 
+#perform dimension reduction (PCA) on the integrated data  
+seurat_integrated <- RunPCA(seurat_integrated, npcs = 30, verbose = F)
 
-#from here on out function calls are exactly like in their seurat object! 
-seurat_integrated <- IntegrateData(anchorset = seurat_anchors, dims = 1:30) 
+#run tsne on the integrated integrated data 
+seurat_integrated <- RunTSNE(seurat_integrated, reduction="pca", dims=1:30)
 
-seurat_integrated_scaled <- ScaleData(seurat_integrated, verbose = F)
+#plot what was calculated through running tsne 
+DimPlot(seurat_integrated, reduction = "tsne")
 
-seurat_integrated_PCA <- RunPCA(seurat_integrated_scaled, npcs = 30, verbose = F)
+#look at marker genes mentioned in paper: 
 
-tsne <- RunTSNE(seurat_integrated_PCA, reduction="pca", dims=1:30)
+#create the Feature Plot and save it 
+plot <- FeaturePlot(object = seurat_integrated, features = c("GJA1"), pt.size = 1) +
+  scale_color_gradientn(colours = c("lightgrey", "blue"), na.value = "lightgrey")
 
-DimPlot(tsne, reduction = "tsne")
+#filter out the rows with NA for the marker gene in qustion 
+#plot$data <- na.omit(plot$data)
 
-#----------------------------------------------------------------------------------------------------------
+# sort the data so the dots with a high expression for the gene in question are on top 
+plot$data <- plot$data[order(plot$data[[4]], na.last = FALSE),]
 
-#check out one of their seurat objects (for AC)
+#disolay the plot
+plot
 
-library(Seurat)
-premade_seurat <- readRDS("GSE127774_ACC_seurat.rds")
-premade_seurat <- UpdateSeuratObject(object = premade_seurat)
-
-DimPlot(premade_seurat, reduction = "tsne")
 
 
 
